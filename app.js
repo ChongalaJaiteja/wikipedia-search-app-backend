@@ -1,5 +1,4 @@
 const express = require("express");
-// const { request } = require("http");
 const cors = require("cors");
 const format = require("date-fns/format");
 const formatRelative = require("date-fns/formatRelative");
@@ -13,8 +12,9 @@ const dbPath = path.join(__dirname, "wikipedia.db");
 const { open } = require("sqlite");
 const sqlite3 = require("sqlite3");
 let db = null;
-let port = 3001;
-const jwtSecretKey = "wikipedia_jaiteja7849";
+let port = process.env.PORT || 3001;
+require("dotenv").config();
+const jwtSecretKey = process.env.JWT_SECRET_KEY;
 const initializeDbAndStartServer = async () => {
     try {
         db = await open({
@@ -49,10 +49,6 @@ const authVerification = (request, response, next) => {
         });
     }
 };
-
-app.get("/", (request, response) => {
-    response.send("hi");
-});
 
 app.post("/register/", async (request, response) => {
     const { username, email, password } = request.body;
