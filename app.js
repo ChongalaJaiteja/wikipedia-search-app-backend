@@ -50,6 +50,8 @@ const authVerification = (request, response, next) => {
     }
 };
 
+app.get("/", (request, response) => response.send("hi"));
+
 app.post("/register/", async (request, response) => {
     const { username, email, password } = request.body;
     const isEmailExistQuery = `select * from users 
@@ -61,15 +63,15 @@ app.post("/register/", async (request, response) => {
     where user_name LIKE ?
     `;
 
-    const isEmailExist = await db.get(isEmailExistQuery, [email]);
-    const isUsernameExist = await db.get(isUsernameExistQuery, [username]);
+    try {
+        const isEmailExist = await db.get(isEmailExistQuery, [email]);
+        const isUsernameExist = await db.get(isUsernameExistQuery, [username]);
 
-    if (isEmailExist) {
-        response.status(409).send("User already exist");
-    } else if (isUsernameExist) {
-        response.status(409).send("Username already exists");
-    } else {
-        try {
+        if (isEmailExist) {
+            response.status(409).send("User already exist");
+        } else if (isUsernameExist) {
+            response.status(409).send("Username already exists");
+        } else {
             const query = `
                 insert into users 
                 (user_name,email,password)
@@ -82,16 +84,15 @@ app.post("/register/", async (request, response) => {
                 hashedPassword,
             ]);
             response.status(200).send("Successfully Registered");
-        } catch (error) {
-            response.status(500).send("Server Error");
         }
+    } catch (error) {
+        response.status(500).send("Server Error");
     }
 });
 
 app.post("/login/", async (request, response) => {
     const { username_or_email, password, is_username } = request.body;
     let isUserExistQuery = ``;
-
     if (is_username) {
         isUserExistQuery = `
         select 
