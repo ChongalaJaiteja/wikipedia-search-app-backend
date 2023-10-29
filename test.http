@@ -2,15 +2,16 @@ POST http://localhost:3001/register/
 Content-Type: application/json
 
 {
-    "username": "jaiteja",
-    "email": "chongalateja1234@gmail.com",
-    "password":"Jaiteja@2021"
+    "username": "Jyothi",
+    "email": "jyothichongala@gmail.com",
+    "password":"Jyothi@2021"
 }
 
 ###
 
 POST http://localhost:3001/login/
 Content-Type: application/json
+
 {
     "username_or_email": "jaiteja",
     "password":"Jaiteja@2021",
