@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const format = require("date-fns/format");
 const formatRelative = require("date-fns/formatRelative");
+const { DateTime } = require("luxon");
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -113,7 +114,7 @@ app.post("/login/", async (request, response) => {
         if (!userExist) {
             response.status(401).send("Invalid login credentials");
         } else {
-            console.log(userExist);
+            // console.log(userExist);
             const isPasswordMatched = await bcrypt.compare(
                 password,
                 userExist.password
@@ -137,15 +138,14 @@ app.post("/login/", async (request, response) => {
 
 app.get("/profile/", authVerification, async (request, response) => {
     const { userId, username, email } = request.userDetails;
-    console.log(userId, username, email);
+    // console.log(userId, username, email);
 });
 
 app.get("/history/", authVerification, async (request, response) => {
     const { limit = 5, offset = 0 } = request.query;
-    console.log(limit, offset);
+    // console.log(limit, offset);
     const { userId, username, email } = request.userDetails;
-    console.log(username, userId);
-
+    // console.log(username, userId);
     const history_data = [];
     const query = `
     SELECT
@@ -202,7 +202,12 @@ app.get("/history/", authVerification, async (request, response) => {
 app.post("/history/", authVerification, async (request, response) => {
     const { title, link } = request.body;
     const { userId, username, email } = request.userDetails;
-    const currentDate = new Date().toISOString();
+    const currentUTC = DateTime.utc();
+    const currentTimeZone = currentUTC.setZone(
+        Intl.DateTimeFormat().resolvedOptions().timeZone
+    );
+    const currentDate = currentTimeZone.toISO();
+
     try {
         const checkHistoryQuery = `
         select history_id from history

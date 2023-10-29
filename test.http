@@ -1,0 +1,16 @@
+POST http://localhost:3001/login/
+Content-Type: application/json
+
+{
+    "username_or_email":"Jaiteja",
+    "password":"Jaiteja@2021",
+    "is_username":true
+}
+
+
+###
+
+GET http://localhost:3001/history
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiamFpdGVqYSIsImVtYWlsIjoiY2hvbmdhbGF0ZWphMTIzNEBnbWFpbC5jb20iLCJpYXQiOjE2OTg1ODUyMDN9.P_HF9ETF1VmQkYvtD5gHJL6YKE059gRrDpgee49qxgc
+
+
