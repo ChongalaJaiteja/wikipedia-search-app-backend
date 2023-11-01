@@ -2,10 +2,10 @@ const express = require("express");
 const cors = require("cors");
 const format = require("date-fns/format");
 const formatRelative = require("date-fns/formatRelative");
-const { DateTime } = require("luxon");
 const app = express();
 app.use(express.json());
 app.use(cors());
+const { DateTime } = require("luxon");
 const path = require("path");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -50,8 +50,6 @@ const authVerification = (request, response, next) => {
         });
     }
 };
-
-app.get("/", (request, response) => response.send("hi"));
 
 app.post("/register/", async (request, response) => {
     const { username, email, password } = request.body;
@@ -114,7 +112,6 @@ app.post("/login/", async (request, response) => {
         if (!userExist) {
             response.status(401).send("Invalid login credentials");
         } else {
-            // console.log(userExist);
             const isPasswordMatched = await bcrypt.compare(
                 password,
                 userExist.password
@@ -138,16 +135,16 @@ app.post("/login/", async (request, response) => {
 
 app.get("/profile/", authVerification, async (request, response) => {
     const { userId, username, email } = request.userDetails;
-    // console.log(userId, username, email);
+    response.send(username, email);
 });
 
 app.get("/history/", authVerification, async (request, response) => {
     const { limit = 5, offset = 0 } = request.query;
-    // console.log(limit, offset);
     const { userId, username, email } = request.userDetails;
-    // console.log(username, userId);
-    const history_data = [];
-    const query = `
+
+    try {
+        const history_data = [];
+        const query = `
     SELECT
     user_id,
     history_date,
@@ -169,44 +166,48 @@ app.get("/history/", authVerification, async (request, response) => {
     history_date DESC
     `;
 
-    const historyResponse = await db.all(query, [
-        userId,
-        userId,
-        limit,
-        offset,
-    ]);
-    const historyData = historyResponse.reduce(
-        (result, { history_date, history_id: historyId, title, url }) => {
-            const date = format(new Date(history_date), "d MMM yyyy");
-            const time = format(new Date(history_date), "h:mm aaa");
-            let entryIndex = result.findIndex((item) => item.date === date);
-            const historyItem = {
-                historyId,
-                time,
-                title,
-                url,
-            };
-            if (entryIndex === -1) {
-                entry = { date, history: [historyItem] };
-                result.push(entry);
-            } else {
-                result[entryIndex].history.push(historyItem);
-            }
-            return result;
-        },
-        history_data
-    );
-    response.send(historyData);
+        const historyResponse = await db.all(query, [
+            userId,
+            userId,
+            limit,
+            offset,
+        ]);
+
+        const historyData = historyResponse.reduce(
+            (result, { history_date, history_id: historyId, title, url }) => {
+                const date = format(new Date(history_date), "d MMM yyyy");
+                const time = format(new Date(history_date), "h:mm aaa");
+                let entryIndex = result.findIndex((item) => item.date === date);
+                const historyItem = {
+                    historyId,
+                    time,
+                    title,
+                    url,
+                };
+
+                if (entryIndex === -1) {
+                    entry = { date, history: [historyItem] };
+                    result.push(entry);
+                } else {
+                    result[entryIndex].history.push(historyItem);
+                }
+                return result;
+            },
+            history_data
+        );
+        response.send(historyData);
+    } catch (error) {
+        console.log(error);
+        response.status(500).send("Server Error");
+    }
 });
 
 app.post("/history/", authVerification, async (request, response) => {
     const { title, link } = request.body;
     const { userId, username, email } = request.userDetails;
-    const currentUTC = DateTime.utc();
-    const currentTimeZone = currentUTC.setZone(
-        Intl.DateTimeFormat().resolvedOptions().timeZone
-    );
-    const currentDate = currentTimeZone.toISO();
+    const customTimeZone = "Asia/Kolkata";
+    const dateInIndianTimeZone = DateTime.now().setZone(customTimeZone);
+    const currentDate = dateInIndianTimeZone.toISO();
 
     try {
         const checkHistoryQuery = `
@@ -227,7 +228,7 @@ app.post("/history/", authVerification, async (request, response) => {
             where history_id = ?
             `;
 
-            const updateHistoryResponse = db.run(updateHistoryQuery, [
+            const updateHistoryResponse = await db.run(updateHistoryQuery, [
                 currentDate,
                 checkHistoryResponse.history_id,
             ]);
@@ -249,4 +250,19 @@ app.post("/history/", authVerification, async (request, response) => {
     }
 });
 
-app.delete("/history", authVerification, async (request, response) => {});
+app.delete("/history", authVerification, async (request, response) => {
+    const { userId, username, email } = request.userDetails;
+    const { historyIds } = request.body;
+    const placeholders = historyIds.map((_, index) => "?").join(",");
+    try {
+        const historyDeleteQuery = `
+        Delete from history
+        where user_id = ? and history_id in (${placeholders})
+        `;
+        await db.run(historyDeleteQuery, [userId, ...historyIds]);
+        response.status(200).send("Ok");
+    } catch (error) {
+        console.error(error);
+        response.status(500).send("Server Error");
+    }
+});
