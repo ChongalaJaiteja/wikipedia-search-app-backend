@@ -82,6 +82,8 @@ app.post("/register/", async (request, response) => {
                 email,
                 hashedPassword,
             ]);
+            await db.commit();
+            // await db.close();
             response.status(200).send("Successfully Registered");
         }
     } catch (error) {
@@ -245,6 +247,8 @@ app.post("/history/", authVerification, async (request, response) => {
                 currentDate,
             ]);
         }
+        await db.commit();
+        // await db.close();
     } catch (error) {
         console.log(error);
     }
@@ -260,6 +264,8 @@ app.delete("/history", authVerification, async (request, response) => {
         where user_id = ? and history_id in (${placeholders})
         `;
         await db.run(historyDeleteQuery, [userId, ...historyIds]);
+        await db.commit();
+        // await db.close();
         response.status(200).send("Ok");
     } catch (error) {
         console.error(error);
