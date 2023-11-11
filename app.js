@@ -63,6 +63,7 @@ app.post("/register/", async (request, response) => {
     `;
 
     try {
+        await db.run("BEGIN TRANSACTION");
         const isEmailExist = await db.get(isEmailExistQuery, [email]);
         const isUsernameExist = await db.get(isUsernameExistQuery, [username]);
 
@@ -82,11 +83,11 @@ app.post("/register/", async (request, response) => {
                 email,
                 hashedPassword,
             ]);
-            await db.commit();
-            // await db.close();
+            await db.run("COMMIT");
             response.status(200).send("Successfully Registered");
         }
     } catch (error) {
+        await db.run("ROLLBACK");
         response.status(500).send("Server Error");
     }
 });
@@ -137,7 +138,7 @@ app.post("/login/", async (request, response) => {
 
 app.get("/profile/", authVerification, async (request, response) => {
     const { userId, username, email } = request.userDetails;
-    response.send(username, email);
+    response.send({ username, email });
 });
 
 app.get("/history/", authVerification, async (request, response) => {
@@ -212,6 +213,7 @@ app.post("/history/", authVerification, async (request, response) => {
     const currentDate = dateInIndianTimeZone.toISO();
 
     try {
+        await db.run("BEGIN TRANSACTION");
         const checkHistoryQuery = `
         select history_id from history
         where user_id = ? and
@@ -234,6 +236,7 @@ app.post("/history/", authVerification, async (request, response) => {
                 currentDate,
                 checkHistoryResponse.history_id,
             ]);
+            await db.run("COMMIT");
         } else {
             const historyQuery = `
             insert into history
@@ -246,10 +249,10 @@ app.post("/history/", authVerification, async (request, response) => {
                 link,
                 currentDate,
             ]);
+            await db.run("COMMIT");
         }
-        await db.commit();
-        // await db.close();
     } catch (error) {
+        await db.run("ROLLBACK");
         console.log(error);
     }
 });
@@ -259,15 +262,16 @@ app.delete("/history", authVerification, async (request, response) => {
     const { historyIds } = request.body;
     const placeholders = historyIds.map((_, index) => "?").join(",");
     try {
+        await db.run("BEGIN TRANSACTION");
         const historyDeleteQuery = `
         Delete from history
-        where user_id = ? and history_id in (${placeholders})
+        where history_id in (${placeholders})
         `;
-        await db.run(historyDeleteQuery, [userId, ...historyIds]);
-        await db.commit();
-        // await db.close();
+        await db.run(historyDeleteQuery, [...historyIds]);
+        await db.run("COMMIT");
         response.status(200).send("Ok");
     } catch (error) {
+        await db.run("ROLLBACK");
         console.error(error);
         response.status(500).send("Server Error");
     }
