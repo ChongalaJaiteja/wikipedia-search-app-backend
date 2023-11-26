@@ -16,6 +16,7 @@ let db = null;
 let port = process.env.PORT || 3001;
 require("dotenv").config();
 const jwtSecretKey = process.env.JWT_SECRET_KEY;
+
 const initializeDbAndStartServer = async () => {
     try {
         db = await open({
@@ -119,13 +120,16 @@ app.post("/login/", async (request, response) => {
                 password,
                 userExist.password
             );
+
             if (isPasswordMatched) {
                 const payload = {
+                    password,
                     userId: userExist.user_id,
                     username: userExist.user_name,
                     email: userExist.email,
                 };
                 const jwt_token = jwt.sign(payload, jwtSecretKey);
+                request.userDetails = payload;
                 response.status(200).send({ jwt_token });
             } else {
                 response.status(401).send("Invalid login credentials");
@@ -137,14 +141,74 @@ app.post("/login/", async (request, response) => {
 });
 
 app.get("/profile/", authVerification, async (request, response) => {
-    const { userId, username, email } = request.userDetails;
-    response.send({ username, email });
+    const { userId, password } = request.userDetails;
+    try {
+        const userQuery = `
+        select user_name from users where user_id = ?
+        `;
+
+        const dbResponse = await db.get(userQuery, [userId]);
+        console.log(dbResponse);
+        response.status(200).send({ username: dbResponse.user_name, password });
+    } catch (error) {
+        console.log(error);
+        response.status(500).send("Server Error");
+    }
+});
+
+//FIXME : Username already exists when password is changed
+app.post("/profile/", authVerification, async (request, response) => {
+    const { username, password } = request.body;
+    const { username: oldUsername } = request.userDetails;
+    console.log("new username", username);
+    console.log("old username", oldUsername);
+    const { userId } = request.userDetails;
+    try {
+        await db.run("BEGIN TRANSACTION");
+        if (username !== oldUsername) {
+            const usernameExistsQuery = `
+        select * from users where user_name = ?
+        `;
+            const dbResponse = await db.get(usernameExistsQuery, [username]);
+            if (!dbResponse) {
+                const updateUserQuery = `
+                update users 
+                set user_name = ?
+                where user_id = ?
+                `;
+                const updateQueryResponse = await db.run(updateUserQuery, [
+                    username,
+                    userId,
+                ]);
+                response.status(200).send("Updated Successfully");
+            } else {
+                response.status(409).send("Username already exists");
+            }
+        } else {
+            const updatePasswordQuery = `
+            update users
+            set password = ?
+            where user_id = ?
+            `;
+            const hashedPassword = await bcrypt.hash(password, 10);
+            const dbResponse = await db.run(updatePasswordQuery, [
+                hashedPassword,
+                userId,
+            ]);
+            response.status(200).send("Updated Successfully");
+        }
+        await db.run("COMMIT");
+    } catch (error) {
+        console.log(error);
+        await db.run("ROLLBACK");
+        response.status(500).send("Server error");
+    }
 });
 
 app.get("/history/", authVerification, async (request, response) => {
-    const { limit = 5, offset = 0 } = request.query;
+    const { limit = 5, offset = 0, search_q = "" } = request.query;
     const { userId, username, email } = request.userDetails;
-
+    console.log(search_q, userId);
     try {
         const history_data = [];
         const query = `
@@ -157,23 +221,25 @@ app.get("/history/", authVerification, async (request, response) => {
     where user_id = ? and strftime("%Y-%m-%d",history_date) in (
         select strftime("%Y-%m-%d",history_date) dates from
         history
-        where user_id = ?
+        where user_id = ? and LOWER(title) LIKE ?
         group by
         dates
         ORDER BY 
         dates DESC
         LIMIT ?
         OFFSET ? 
-    )
+    ) and LOWER(title) LIKE ?
     ORDER BY
     history_date DESC
     `;
-
+        console.log(offset);
         const historyResponse = await db.all(query, [
             userId,
             userId,
+            `%${search_q.toLowerCase()}%`,
             limit,
             offset,
+            `%${search_q.toLowerCase()}%`,
         ]);
 
         const historyData = historyResponse.reduce(
@@ -198,7 +264,18 @@ app.get("/history/", authVerification, async (request, response) => {
             },
             history_data
         );
-        response.send(historyData);
+        const getTotalResultsQuery = `
+        select count(distinct strftime("%Y-%m-%d",history_date)) total_history 
+        from history 
+        where user_id = ? and LOWER(title) LIKE ?
+        `;
+
+        const getTotalResultsResponse = await db.get(getTotalResultsQuery, [
+            userId,
+            `%${search_q.toLowerCase()}%`,
+        ]);
+
+        response.send({ historyData, ...getTotalResultsResponse });
     } catch (error) {
         console.log(error);
         response.status(500).send("Server Error");
@@ -251,8 +328,10 @@ app.post("/history/", authVerification, async (request, response) => {
             ]);
             await db.run("COMMIT");
         }
+        response.status(200).send("Ok");
     } catch (error) {
         await db.run("ROLLBACK");
+        response.status(200).send(error);
         console.log(error);
     }
 });
